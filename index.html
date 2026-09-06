@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>MindTask</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <div id="topbar">
+    <div class="brand">🧠 MindTask</div>
+    <input type="search" id="search-input" placeholder="Search tasks...">
+    <select id="priority-filter">
+      <option value="">All priorities</option>
+      <option value="High">High +</option>
+      <option value="Medium">Medium +</option>
+      <option value="Low">Low +</option>
+    </select>
+    <select id="person-filter">
+      <option value="">All people</option>
+    </select>
+    <label class="chk"><input type="checkbox" id="hide-done"> Hide completed</label>
+    <button class="icon-btn" id="add-root-btn">+ New Task</button>
+    <div class="view-tabs">
+      <button data-view="map" class="active">Mind Map</button>
+      <button data-view="timeline">Timeline</button>
+      <button data-view="person">By Person</button>
+    </div>
+  </div>
+
+  <div id="canvas-wrap">
+    <div id="empty-hint">Double-click anywhere to create your first task</div>
+    <svg id="edges"></svg>
+    <div id="canvas"></div>
+    <div id="zoom-controls">
+      <button id="zoom-in">+</button>
+      <button id="zoom-reset">⤾</button>
+      <button id="zoom-out">−</button>
+    </div>
+    <div id="minimap-hint">Scroll to zoom · drag background to pan · double-click to add a root task</div>
+  </div>
+
+  <div id="list-view"></div>
+
+</div>
+
+<div id="side-panel-overlay"></div>
+<div id="side-panel">
+  <h3 id="panel-heading">Task Details</h3>
+  <label>Title</label>
+  <input id="f-title" type="text">
+
+  <label>Description</label>
+  <textarea id="f-description"></textarea>
+
+  <label>Priority</label>
+  <select id="f-priority">
+    <option>High</option>
+    <option>Medium</option>
+    <option>Low</option>
+  </select>
+
+  <label>Status</label>
+  <select id="f-status">
+    <option>Not Started</option>
+    <option>In Progress</option>
+    <option>Done</option>
+  </select>
+
+  <label>Start Date</label>
+  <input id="f-start" type="date">
+
+  <label>Deadline</label>
+  <input id="f-deadline" type="date">
+
+  <label>Assignee</label>
+  <input id="f-assignee" type="text" list="assignee-list" placeholder="e.g. Riya">
+  <datalist id="assignee-list"></datalist>
+
+  <div class="panel-actions">
+    <button class="btn-close" id="panel-cancel">Close</button>
+    <button class="btn-delete" id="panel-delete">Delete</button>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
