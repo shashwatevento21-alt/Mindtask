@@ -295,14 +295,14 @@
       ${kids.length ? `<div class="progress-bar-track"><div class="progress-bar-fill" style="width:${Math.round(100 * doneKids / kids.length)}%"></div></div>` : ''}
       <div class="node-controls">
         <button data-act="add">+ Sub-task</button>
-        ${kids.length ? `<button data-act="toggle">${Number(t.is_expanded) ? 'Collapse' : 'Expand'}</button>` : ''}
         <button data-act="delete" class="danger">Delete</button>
       </div>
+      ${kids.length ? `<div class="expand-toggle" data-act="toggle" title="${Number(t.is_expanded) ? 'Collapse sub-tasks' : `Expand ${kids.length} sub-task${kids.length > 1 ? 's' : ''}`}">${Number(t.is_expanded) ? '−' : '+'}</div>` : ''}
     `;
 
     // dragging (handled by one shared window listener set up once, see activeDrag below)
     el.addEventListener('mousedown', (e) => {
-      if (e.target.closest('.node-controls') || e.target.closest('.node-status-dot')) return;
+      if (e.target.closest('.node-controls') || e.target.closest('.node-status-dot') || e.target.closest('.expand-toggle')) return;
       const c = screenToCanvas(e.clientX, e.clientY);
       activeDrag = {
         task: t, el, moved: false,

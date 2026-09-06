@@ -104,6 +104,28 @@ label.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; color
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   user-select: none;
 }
+
+.expand-toggle {
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 5;
+}
+.expand-toggle:hover { background: var(--accent); color: #fff; }
 .node:hover { border-color: var(--accent); }
 .node.selected { outline: 2px solid var(--accent); }
 .node.priority-High { border-left-color: var(--high); }
