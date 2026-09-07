@@ -11,17 +11,28 @@ function input() {
 switch ($method) {
 
     case 'GET':
-        $stmt = $pdo->query('SELECT * FROM tasks ORDER BY created_at ASC');
+        if (!empty($_GET['project_id'])) {
+            $stmt = $pdo->prepare('SELECT * FROM tasks WHERE project_id = ? ORDER BY created_at ASC');
+            $stmt->execute([$_GET['project_id']]);
+        } else {
+            $stmt = $pdo->query('SELECT * FROM tasks ORDER BY created_at ASC');
+        }
         echo json_encode($stmt->fetchAll());
         break;
 
     case 'POST':
         $d = input();
+        if (empty($d['project_id'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'project_id is required']);
+            break;
+        }
         $stmt = $pdo->prepare(
-            'INSERT INTO tasks (parent_id, title, description, priority, start_date, deadline, assignee_name, status, is_expanded, position_x, position_y)
-             VALUES (:parent_id, :title, :description, :priority, :start_date, :deadline, :assignee_name, :status, :is_expanded, :position_x, :position_y)'
+            'INSERT INTO tasks (project_id, parent_id, title, description, priority, start_date, deadline, assignee_name, status, is_expanded, position_x, position_y)
+             VALUES (:project_id, :parent_id, :title, :description, :priority, :start_date, :deadline, :assignee_name, :status, :is_expanded, :position_x, :position_y)'
         );
         $stmt->execute([
+            ':project_id'    => $d['project_id'],
             ':parent_id'     => $d['parent_id'] ?? null,
             ':title'         => $d['title'] ?? 'Untitled Task',
             ':description'   => $d['description'] ?? null,
@@ -47,7 +58,7 @@ switch ($method) {
             echo json_encode(['error' => 'id is required']);
             break;
         }
-        $fields = ['parent_id','title','description','priority','start_date','deadline','assignee_name','status','is_expanded','position_x','position_y'];
+        $fields = ['project_id','parent_id','title','description','priority','start_date','deadline','assignee_name','status','is_expanded','position_x','position_y'];
         $set = [];
         $params = [':id' => $d['id']];
         foreach ($fields as $f) {

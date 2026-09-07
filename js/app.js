@@ -8,15 +8,20 @@
   const LocalDB = {
     key: 'mindtask_tasks_v1',
     nextId: 'mindtask_next_id_v1',
+    projectsKey: 'mindtask_projects_v1',
+    nextProjectId: 'mindtask_next_project_id_v1',
     read() { try { return JSON.parse(localStorage.getItem(this.key)) || []; } catch (e) { return []; } },
     write(arr) { localStorage.setItem(this.key, JSON.stringify(arr)); },
-    list() { return Promise.resolve(this.read()); },
+    list(projectId) {
+      const all = this.read();
+      return Promise.resolve(projectId ? all.filter(t => Number(t.project_id) === Number(projectId)) : all);
+    },
     create(data) {
       const arr = this.read();
       let id = parseInt(localStorage.getItem(this.nextId) || '1', 10);
       const now = new Date().toISOString();
       const task = Object.assign({
-        id, parent_id: null, title: 'Untitled Task', description: '', priority: 'Medium',
+        id, project_id: null, parent_id: null, title: 'Untitled Task', description: '', priority: 'Medium',
         start_date: null, deadline: null, assignee_name: '', status: 'Not Started',
         is_expanded: 1, position_x: 0, position_y: 0, created_at: now, updated_at: now
       }, data, { id });
@@ -32,6 +37,15 @@
       arr[idx] = Object.assign({}, arr[idx], data, { updated_at: new Date().toISOString() });
       this.write(arr);
       return Promise.resolve(arr[idx]);
+    },
+    updateBatch(items) {
+      const arr = this.read();
+      items.forEach(item => {
+        const idx = arr.findIndex(t => t.id === item.id);
+        if (idx !== -1) arr[idx] = Object.assign({}, arr[idx], item);
+      });
+      this.write(arr);
+      return Promise.resolve({ success: true, updated: items.length });
     },
     remove(id) {
       let arr = this.read();
@@ -49,11 +63,49 @@
       arr = arr.filter(t => !toDelete.has(t.id));
       this.write(arr);
       return Promise.resolve({ success: true });
+    },
+
+    readProjects() { try { return JSON.parse(localStorage.getItem(this.projectsKey)) || []; } catch (e) { return []; } },
+    writeProjects(arr) { localStorage.setItem(this.projectsKey, JSON.stringify(arr)); },
+    listProjects() {
+      let arr = this.readProjects();
+      if (!arr.length) {
+        arr = [{ id: 1, name: 'My Tasks', created_at: new Date().toISOString() }];
+        this.writeProjects(arr);
+        localStorage.setItem(this.nextProjectId, '2');
+      }
+      return Promise.resolve(arr);
+    },
+    createProject(data) {
+      const arr = this.readProjects();
+      const id = parseInt(localStorage.getItem(this.nextProjectId) || '1', 10);
+      const project = { id, name: data.name || 'New Project', created_at: new Date().toISOString() };
+      arr.push(project);
+      this.writeProjects(arr);
+      localStorage.setItem(this.nextProjectId, String(id + 1));
+      return Promise.resolve(project);
+    },
+    renameProject(data) {
+      const arr = this.readProjects();
+      const idx = arr.findIndex(p => p.id === data.id);
+      if (idx !== -1) { arr[idx].name = data.name; this.writeProjects(arr); }
+      return Promise.resolve(arr[idx]);
+    },
+    removeProject(id) {
+      let arr = this.readProjects();
+      if (arr.length <= 1) return Promise.resolve({ error: 'Cannot delete the last remaining project' });
+      arr = arr.filter(p => p.id !== id);
+      this.writeProjects(arr);
+      const tasks = this.read().filter(t => Number(t.project_id) !== Number(id));
+      this.write(tasks);
+      return Promise.resolve({ success: true });
     }
   };
 
   const API = {
     base: 'api/tasks.php',
+    projectsBase: 'api/projects.php',
+    positionsBase: 'api/update_positions.php',
     useLocal: false,
     async init() {
       try {
@@ -66,7 +118,10 @@
         console.warn('MindTask: no PHP backend detected, using local browser storage instead.');
       }
     },
-    list() { return this.useLocal ? LocalDB.list() : fetch(this.base).then(r => r.json()); },
+    list(projectId) {
+      return this.useLocal ? LocalDB.list(projectId) :
+        fetch(this.base + '?project_id=' + encodeURIComponent(projectId)).then(r => r.json());
+    },
     create(data) {
       return this.useLocal ? LocalDB.create(data) :
         fetch(this.base, { method: 'POST', body: JSON.stringify(data) }).then(r => r.json());
@@ -75,9 +130,29 @@
       return this.useLocal ? LocalDB.update(data) :
         fetch(this.base, { method: 'PUT', body: JSON.stringify(data) }).then(r => r.json());
     },
+    updateBatch(items) {
+      if (!items.length) return Promise.resolve({ success: true, updated: 0 });
+      return this.useLocal ? LocalDB.updateBatch(items) :
+        fetch(this.positionsBase, { method: 'POST', body: JSON.stringify(items) }).then(r => r.json());
+    },
     remove(id) {
       return this.useLocal ? LocalDB.remove(id) :
         fetch(this.base + '?id=' + encodeURIComponent(id), { method: 'DELETE' }).then(r => r.json());
+    },
+    listProjects() {
+      return this.useLocal ? LocalDB.listProjects() : fetch(this.projectsBase).then(r => r.json());
+    },
+    createProject(data) {
+      return this.useLocal ? LocalDB.createProject(data) :
+        fetch(this.projectsBase, { method: 'POST', body: JSON.stringify(data) }).then(r => r.json());
+    },
+    renameProject(data) {
+      return this.useLocal ? LocalDB.renameProject(data) :
+        fetch(this.projectsBase, { method: 'PUT', body: JSON.stringify(data) }).then(r => r.json());
+    },
+    removeProject(id) {
+      return this.useLocal ? LocalDB.removeProject(id) :
+        fetch(this.projectsBase + '?id=' + encodeURIComponent(id), { method: 'DELETE' }).then(r => r.json());
     }
   };
 
@@ -89,6 +164,8 @@
   let selectedId = null;
   let currentView = 'map';
   let filters = { search: '', priority: '', person: '', hideDone: false };
+  let projects = [];
+  let currentProjectId = null;
 
   const view = {
     pan: { x: 80, y: 80 },
@@ -96,6 +173,15 @@
   };
 
   const priorityRank = { High: 3, Medium: 2, Low: 1 };
+
+  // Layout tuning constants for the auto-layout collision-avoidance engine.
+  const LAYOUT = {
+    MIN_VERTICAL_GAP: 40,
+    MIN_HORIZONTAL_GAP: 300,
+    NODE_MIN_WIDTH: 220,
+    NODE_MIN_HEIGHT: 68,
+    MAX_COLLISION_ITERATIONS: 300
+  };
 
   /* ======================= DOM refs ======================= */
 
@@ -112,6 +198,7 @@
   const personFilter = $('#person-filter');
   const hideDoneChk = $('#hide-done');
   const assigneeList = $('#assignee-list');
+  const projectSelect = $('#project-select');
 
   /* ======================= Tree helpers ======================= */
 
@@ -150,6 +237,13 @@
     return null;
   }
 
+  function subtreeIds(rootId) {
+    const ids = [rootId];
+    const walk = (pid) => getChildren(pid).forEach(c => { ids.push(c.id); walk(c.id); });
+    walk(rootId);
+    return ids;
+  }
+
   function isOverdue(t) {
     if (!t.deadline || t.status === 'Done') return false;
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -169,19 +263,88 @@
 
   /* ======================= Load ======================= */
 
-  async function loadTasks() {
-    tasks = (await API.list()).map(t => ({
+  function normalizeTaskFields(t) {
+    return {
       ...t,
       id: Number(t.id),
+      project_id: t.project_id === null || t.project_id === undefined ? currentProjectId : Number(t.project_id),
       parent_id: t.parent_id === null || t.parent_id === undefined || t.parent_id === '' ? null : Number(t.parent_id),
       position_x: Number(t.position_x) || 0,
       position_y: Number(t.position_y) || 0,
       is_expanded: Number(t.is_expanded)
-    }));
+    };
+  }
+
+  async function loadTasks() {
+    tasks = (await API.list(currentProjectId)).map(normalizeTaskFields);
     rebuildIndexes();
     refreshFilterOptions();
+    selectedId = null;
     render();
   }
+
+  /* ======================= Projects ======================= */
+
+  async function loadProjects() {
+    projects = await API.listProjects();
+    if (!projects.length) {
+      const p = await API.createProject({ name: 'My Tasks' });
+      projects = [p];
+    }
+    const saved = Number(localStorage.getItem('mindtask_current_project'));
+    currentProjectId = projects.some(p => Number(p.id) === saved) ? saved : Number(projects[0].id);
+    renderProjectSelect();
+  }
+
+  function renderProjectSelect() {
+    projectSelect.innerHTML = projects.map(p =>
+      `<option value="${p.id}">${escapeHtml(p.name)}</option>`
+    ).join('');
+    projectSelect.value = currentProjectId;
+  }
+
+  async function switchProject(id) {
+    currentProjectId = Number(id);
+    localStorage.setItem('mindtask_current_project', String(currentProjectId));
+    closePanel();
+    view.pan = { x: 80, y: 80 };
+    view.scale = 1;
+    await loadTasks();
+    applyTransform();
+  }
+
+  projectSelect.onchange = (e) => switchProject(e.target.value);
+
+  $('#project-new-btn').onclick = async () => {
+    const name = prompt('Name your new project:', 'New Project');
+    if (!name) return;
+    const p = await API.createProject({ name: name.trim() || 'New Project' });
+    projects.push(p);
+    renderProjectSelect();
+    await switchProject(p.id);
+  };
+
+  $('#project-rename-btn').onclick = async () => {
+    const current = projects.find(p => Number(p.id) === currentProjectId);
+    if (!current) return;
+    const name = prompt('Rename project:', current.name);
+    if (!name || !name.trim()) return;
+    await API.renameProject({ id: currentProjectId, name: name.trim() });
+    current.name = name.trim();
+    renderProjectSelect();
+  };
+
+  $('#project-delete-btn').onclick = async () => {
+    if (projects.length <= 1) { alert('You need at least one project — create another before deleting this one.'); return; }
+    const current = projects.find(p => Number(p.id) === currentProjectId);
+    if (!current) return;
+    if (!confirm(`Delete project "${current.name}" and ALL its tasks? This cannot be undone.`)) return;
+    const result = await API.removeProject(currentProjectId);
+    if (result && result.error) { alert(result.error); return; }
+    projects = projects.filter(p => Number(p.id) !== currentProjectId);
+    renderProjectSelect();
+    await switchProject(projects[0].id);
+  };
 
   function refreshFilterOptions() {
     const names = Array.from(new Set(tasks.map(t => t.assignee_name).filter(Boolean))).sort();
@@ -210,6 +373,104 @@
       x: (clientX - rect.left - view.pan.x) / view.scale,
       y: (clientY - rect.top - view.pan.y) / view.scale
     };
+  }
+
+  /* ======================= Auto-layout collision engine ======================= */
+
+  function nodeRect(t) {
+    const el = canvasEl.querySelector(`.node[data-id="${t.id}"]`);
+    const w = el ? el.offsetWidth : LAYOUT.NODE_MIN_WIDTH;
+    const h = el ? el.offsetHeight : LAYOUT.NODE_MIN_HEIGHT;
+    return { x: t.position_x, y: t.position_y, w, h, right: t.position_x + w, bottom: t.position_y + h };
+  }
+
+  function rectsOverlap(a, b, gap) {
+    return a.x < b.right + gap && a.right + gap > b.x && a.y < b.bottom + gap && a.bottom + gap > b.y;
+  }
+
+  function shiftSubtree(rootId, dy) {
+    if (!dy) return;
+    subtreeIds(rootId).forEach(id => { const t = byId.get(id); if (t) t.position_y += dy; });
+  }
+
+  // Iterative collision resolution: whenever two unrelated tasks' boxes
+  // overlap, the lower one (with its whole subtree, to keep it intact) is
+  // pushed down, and its siblings are re-queued so the push can cascade
+  // up through ancestor sibling groups.
+  function resolveCollisions(seedIds) {
+    const subtreeCache = new Map();
+    const getSubtree = (id) => {
+      if (!subtreeCache.has(id)) subtreeCache.set(id, new Set(subtreeIds(id)));
+      return subtreeCache.get(id);
+    };
+
+    let queue = [...seedIds];
+    let iterations = 0;
+    while (queue.length && iterations < LAYOUT.MAX_COLLISION_ITERATIONS) {
+      iterations++;
+      const id = queue.shift();
+      const t = byId.get(id);
+      if (!t) continue;
+      const rectA = nodeRect(t);
+      const ownFamily = getSubtree(id);
+
+      for (const other of tasks) {
+        if (other.id === id) continue;
+        if (ownFamily.has(other.id)) continue;
+        if (getSubtree(other.id).has(id)) continue; // other is an ancestor of t
+        const rectB = nodeRect(other);
+        if (!rectsOverlap(rectA, rectB, LAYOUT.MIN_VERTICAL_GAP)) continue;
+
+        const mover = rectA.y <= rectB.y ? other : t;
+        const moverRect = mover === other ? rectB : rectA;
+        const staticRect = mover === other ? rectA : rectB;
+
+        const overlapAmount = (staticRect.y + staticRect.h) - moverRect.y;
+        const dy = overlapAmount + LAYOUT.MIN_VERTICAL_GAP;
+        shiftSubtree(mover.id, dy);
+        queue.push(mover.id);
+        if (mover.parent_id !== null) {
+          getChildren(mover.parent_id).forEach(sib => { if (sib.id !== mover.id) queue.push(sib.id); });
+        }
+      }
+    }
+  }
+
+  // Closes vertical gaps between a parent's children (used after delete)
+  // without touching unrelated branches.
+  function respaceChildren(parentId) {
+    if (parentId === null || parentId === undefined) return;
+    const siblings = getChildren(parentId).slice().sort((a, b) => a.position_y - b.position_y);
+    if (!siblings.length) return;
+    let cursorY = siblings[0].position_y;
+    siblings.forEach(s => {
+      const dy = cursorY - s.position_y;
+      if (dy) shiftSubtree(s.id, dy);
+      cursorY += nodeRect(s).h + LAYOUT.MIN_VERTICAL_GAP;
+    });
+  }
+
+  function persistAllPositions() {
+    API.updateBatch(tasks.map(t => ({ id: t.id, position_x: t.position_x, position_y: t.position_y })));
+  }
+  const debouncedPersistPositions = debounce(() => persistAllPositions(), 150);
+
+  function autoArrangeAll() {
+    let cursorY = 60;
+    function placeNode(id, x) {
+      const t = byId.get(id);
+      t.position_x = x;
+      t.position_y = cursorY;
+      cursorY += nodeRect(t).h + LAYOUT.MIN_VERTICAL_GAP;
+      getChildren(id).forEach(k => placeNode(k.id, x + LAYOUT.MIN_HORIZONTAL_GAP));
+    }
+    render();
+    getChildren(null).forEach(root => placeNode(root.id, 60));
+    render();
+    persistAllPositions();
+    view.pan = { x: 80, y: 60 };
+    view.scale = 1;
+    applyTransform();
   }
 
   /* ======================= Render (Mind Map view) ======================= */
@@ -440,8 +701,8 @@
   /* ======================= Task operations ======================= */
 
   async function addRootTask(x, y) {
-    const t = await API.create({ title: 'New Task', position_x: x, position_y: y, parent_id: null });
-    tasks.push(normalizeTask(t));
+    const t = normalizeTaskFields(await API.create({ project_id: currentProjectId, title: 'New Task', position_x: x, position_y: y, parent_id: null }));
+    tasks.push(t);
     rebuildIndexes();
     render();
     openPanel(byId.get(Number(t.id)));
@@ -450,27 +711,29 @@
   async function addChild(parent) {
     parent.is_expanded = 1;
     await API.update({ id: parent.id, is_expanded: 1 });
-    const siblingCount = getChildren(parent.id).length;
-    const t = await API.create({
+    const siblings = getChildren(parent.id);
+    let x = parent.position_x + LAYOUT.MIN_HORIZONTAL_GAP;
+    let y;
+    if (!siblings.length) {
+      y = parent.position_y;
+    } else {
+      const last = siblings.reduce((a, b) => (a.position_y > b.position_y ? a : b));
+      const lastRect = nodeRect(last);
+      y = lastRect.y + lastRect.h + LAYOUT.MIN_VERTICAL_GAP;
+    }
+    const t = normalizeTaskFields(await API.create({
+      project_id: currentProjectId,
       title: 'New Sub-task',
       parent_id: parent.id,
-      position_x: parent.position_x + 300,
-      position_y: parent.position_y + siblingCount * 110
-    });
-    tasks.push(normalizeTask(t));
+      position_x: x,
+      position_y: y
+    }));
+    tasks.push(t);
     rebuildIndexes();
     render();
-  }
-
-  function normalizeTask(t) {
-    return {
-      ...t,
-      id: Number(t.id),
-      parent_id: t.parent_id === null || t.parent_id === undefined || t.parent_id === '' ? null : Number(t.parent_id),
-      position_x: Number(t.position_x) || 0,
-      position_y: Number(t.position_y) || 0,
-      is_expanded: Number(t.is_expanded)
-    };
+    resolveCollisions([t.id]);
+    render();
+    debouncedPersistPositions();
   }
 
   async function deleteTask(t) {
@@ -479,6 +742,7 @@
       ? `Delete "${t.title}" and its ${kidCount} sub-task${kidCount > 1 ? 's' : ''}?`
       : `Delete "${t.title}"?`;
     if (!confirm(msg)) return;
+    const parentId = t.parent_id;
     await API.remove(t.id);
     const toRemove = new Set([t.id]);
     let grew = true;
@@ -491,7 +755,9 @@
     tasks = tasks.filter(x => !toRemove.has(x.id));
     rebuildIndexes();
     refreshFilterOptions();
+    if (parentId !== null) respaceChildren(parentId);
     render();
+    persistAllPositions();
     closePanel();
   }
 
@@ -615,6 +881,7 @@
   /* ======================= Top bar ======================= */
 
   $('#add-root-btn').onclick = () => addRootTask(-view.pan.x / view.scale + 100, -view.pan.y / view.scale + 100);
+  $('#auto-arrange-btn').onclick = () => autoArrangeAll();
 
   searchInput.oninput = (e) => {
     filters.search = e.target.value.trim();
@@ -665,6 +932,7 @@
 
   (async function init() {
     await API.init();
+    await loadProjects();
     await loadTasks();
     applyTransform();
   })();

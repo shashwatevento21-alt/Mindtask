@@ -257,6 +257,20 @@ label.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; color
 .list-row .list-title { flex: 1; font-size: 13px; }
 .list-row.done .list-title { text-decoration: line-through; }
 
+#auto-arrange-btn {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  z-index: 10;
+}
+
 /* ---------- Empty state ---------- */
 #empty-hint {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);

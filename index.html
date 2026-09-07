@@ -5,13 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <title>MindTask</title>
-<link rel="stylesheet" href="css/style.css?v=2">
+<link rel="stylesheet" href="css/style.css?v=3">
 </head>
 <body>
 <div id="app">
 
   <div id="topbar">
     <div class="brand">🧠 MindTask</div>
+    <select id="project-select" title="Switch project"></select>
+    <button class="icon-btn" id="project-new-btn" title="New project">+ Project</button>
+    <button class="icon-btn" id="project-rename-btn" title="Rename current project">✎</button>
+    <button class="icon-btn" id="project-delete-btn" title="Delete current project">🗑</button>
     <input type="search" id="search-input" placeholder="Search tasks...">
     <select id="priority-filter">
       <option value="">All priorities</option>
@@ -35,6 +39,7 @@
     <div id="empty-hint">Double-click anywhere to create your first task</div>
     <svg id="edges"></svg>
     <div id="canvas"></div>
+    <button id="auto-arrange-btn" title="Auto-arrange all tasks">🧹 Auto-arrange</button>
     <div id="zoom-controls">
       <button id="zoom-in">+</button>
       <button id="zoom-reset">⤾</button>
@@ -86,6 +91,6 @@
   </div>
 </div>
 
-<script src="js/app.js?v=2"></script>
+<script src="js/app.js?v=3"></script>
 </body>
 </html>
