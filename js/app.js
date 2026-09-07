@@ -306,6 +306,7 @@
   async function switchProject(id) {
     currentProjectId = Number(id);
     localStorage.setItem('mindtask_current_project', String(currentProjectId));
+    projectSelect.value = currentProjectId;
     closePanel();
     view.pan = { x: 80, y: 80 };
     view.scale = 1;
